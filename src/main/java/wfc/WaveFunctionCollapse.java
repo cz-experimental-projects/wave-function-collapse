@@ -22,11 +22,11 @@ import java.util.stream.Collectors;
 
 public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
 
-    private static final int tileSize = 64;
+    private static final int tileSize = 32;
     private static final int screenWidth = 1280;
     private static final int screenHeight = 720;
-    private static final int dimensionX = screenWidth / tileSize;
-    private static final int dimensionY = screenHeight / tileSize;
+    private static final int dimensionX = 9;
+    private static final int dimensionY = 9;
     
     private final ICollapseType<T> collapseType;
     private final Random random;
@@ -51,6 +51,11 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
         grid = createGrid((x, y) -> new Tile<>(collapseType, x, y));
     }
 
+    private void backTrack(int x, int y) {
+        System.out.println("Require back tracking at " + new Pos(x, y));
+        paused = true;
+    }
+
     @Override
     public void draw() {
         background(255);
@@ -63,14 +68,22 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
                 toPickTiles.sort(Comparator.comparingInt(a -> a.getOptions().size()));
                 int lowestEntropy = toPickTiles.get(0).getOptions().size();
                 toPickTiles = toPickTiles.stream().filter(a -> a.getOptions().size() == lowestEntropy).collect(Collectors.toList());
-
                 Tile<T> pickedTile = getRandomElement(toPickTiles);
-                // TODO: back tracing if 
-                T pickedOption = getRandomElement(pickedTile.getOptions());
+                List<T> options = pickedTile.getOptions();
+                
+                int x = pickedTile.getX();
+                int y = pickedTile.getY();
+                
+                if (options.isEmpty()) {
+                    backTrack(x, y);
+                    return;
+                }
+                
+                T pickedOption = getRandomElement(options);
                 pickedTile.collapse(pickedOption);
 
-                for (Pos p : pickedOption.reduceEntropyOfAffectedTiles(pickedTile.getX(), pickedTile.getY(), grid)) {
-                    grid[posToIndex(p)].getInfluencedBy().add(new Pos(pickedTile.getX(), pickedTile.getY()));
+                for (Pos p : pickedOption.reduceEntropyOfAffectedTiles(x, y, grid)) {
+                    grid[posToIndex(p)].getInfluencedBy().add(new Pos(x, y));
                 }
             }
             
@@ -81,7 +94,7 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
         render();
         renderDebugger();
     }
-    
+
     @Override
     public void keyPressed(KeyEvent event) {
         if (event.getKey() == ' ') {
@@ -100,13 +113,13 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
             grid = createGrid((x, y) -> new Tile<>(collapseType, x, y));
         }
     }
-    
+
     private void render() {
         forEach(tile -> {
             int x = tile.getX() * tileSize;
             int y = tile.getY() * tileSize;
             if (tile.isCollapsed()) {
-                tile.getOptions().get(0).render(this, x, y, tileSize);
+                tile.getCollapsedTo().render(this, x, y, tileSize);
             } else {
                 fill(255);
                 stroke(0);
@@ -144,6 +157,15 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
         text("Options: " + tile.getOptions(), rx + 10, ry + 60, 290, 40);
         text("Influenced by: " + tile.getInfluencedBy(), rx + 10, ry + 90, 290, 130);
     }
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     @SuppressWarnings("unchecked")
     private Tile<T>[] createGrid(BiFunction<Integer, Integer, Tile<T>> factory) {

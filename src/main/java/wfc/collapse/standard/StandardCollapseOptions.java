@@ -138,8 +138,8 @@ public enum StandardCollapseOptions implements ICollapseOption {
             options.addAll(fitAllConditions);
             return true;
         }
-        options.addAll(newOptions);
         
+        options.addAll(newOptions);
         return true;
     }
 

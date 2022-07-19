@@ -8,12 +8,14 @@ import java.util.List;
 
 public class Tile<T extends ICollapseOption> {
     
-    private boolean collapsed;
     private final List<T> options;
     private final int x;
     private final int y;
-    
-    // debugging purposes
+
+    private boolean collapsed;
+    private T collapsedTo;
+
+    // for debugging and back tracking
     private final List<Pos> influencedBy;
         
     public Tile(ICollapseType<T> type, int x, int y) {
@@ -35,10 +37,16 @@ public class Tile<T extends ICollapseOption> {
 
     public void collapse(T option) {
         collapsed = true;
-        options.clear();
-        options.add(option);
+        collapsedTo = option;
+        if (!options.contains(option)) {
+            options.add(option);
+        }
     }
-    
+
+    public T getCollapsedTo() {
+        return collapsedTo;
+    }
+
     public int getX() {
         return x;
     }
