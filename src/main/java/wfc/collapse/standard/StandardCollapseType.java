@@ -1,7 +1,7 @@
 package wfc.collapse.standard;
 
 import wfc.Resources;
-import wfc.WaveFunctionCollapse;
+import wfc.process.WaveFunctionCollapse;
 import wfc.collapse.ICollapseType;
 
 public class StandardCollapseType implements ICollapseType<StandardCollapseOptions> {

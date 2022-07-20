@@ -2,7 +2,7 @@ package wfc.collapse.standard;
 
 import processing.core.PApplet;
 import processing.core.PImage;
-import wfc.WaveFunctionCollapse;
+import wfc.process.WaveFunctionCollapse;
 import wfc.collapse.ICollapseOption;
 import wfc.obj.Direction;
 import wfc.obj.Pos;
@@ -12,54 +12,24 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public enum StandardCollapseOptions implements ICollapseOption {
-    BLANK("standard/blank.png", new HashMap<>() {
-        {
-            put(Direction.UP, ConnectionState.DISCONNECTED);
-            put(Direction.LEFT, ConnectionState.DISCONNECTED);
-            put(Direction.RIGHT, ConnectionState.DISCONNECTED);
-            put(Direction.DOWN, ConnectionState.DISCONNECTED);
-        }
-    }),
-    UP("standard/up.png", new HashMap<>() {
-        {
-            put(Direction.UP, ConnectionState.CONNECTED);
-            put(Direction.LEFT, ConnectionState.CONNECTED);
-            put(Direction.RIGHT, ConnectionState.CONNECTED);
-            put(Direction.DOWN, ConnectionState.DISCONNECTED);
-        }
-    }),
-    LEFT("standard/left.png", new HashMap<>() {
-        {
-            put(Direction.UP, ConnectionState.CONNECTED);
-            put(Direction.LEFT, ConnectionState.CONNECTED);
-            put(Direction.RIGHT, ConnectionState.DISCONNECTED);
-            put(Direction.DOWN, ConnectionState.CONNECTED);
-        }
-    }),
-    DOWN("standard/down.png", new HashMap<>() {
-        {
-            put(Direction.UP, ConnectionState.DISCONNECTED);
-            put(Direction.LEFT, ConnectionState.CONNECTED);
-            put(Direction.RIGHT, ConnectionState.CONNECTED);
-            put(Direction.DOWN, ConnectionState.CONNECTED);
-        }
-    }),
-    RIGHT("standard/right.png", new HashMap<>() {
-        {
-            put(Direction.UP, ConnectionState.CONNECTED);
-            put(Direction.LEFT, ConnectionState.DISCONNECTED);
-            put(Direction.RIGHT, ConnectionState.CONNECTED);
-            put(Direction.DOWN, ConnectionState.CONNECTED);
-        }
-    });
+    BLANK("standard/blank.png", false, false, false, false),
+    UP("standard/up.png", true, true, true, false),
+    LEFT("standard/left.png", true, true, false, true),
+    DOWN("standard/down.png", false, true, true, true),
+    RIGHT("standard/right.png", true, false, true, true),
+    CROSS("standard/cross.png", true, true, true, true);
 
     private final String textureFile;
     private final Map<Direction, ConnectionState> connectionState;
     private PImage image;
 
-    StandardCollapseOptions(String textureFile, Map<Direction, ConnectionState> validNeighbors) {
+    StandardCollapseOptions(String textureFile, boolean up, boolean left, boolean right, boolean down) {
         this.textureFile = textureFile;
-        this.connectionState = validNeighbors;
+        this.connectionState = new HashMap<>();
+        this.connectionState.put(Direction.UP, up ? ConnectionState.CONNECTED : ConnectionState.DISCONNECTED);
+        this.connectionState.put(Direction.LEFT, left ? ConnectionState.CONNECTED : ConnectionState.DISCONNECTED);
+        this.connectionState.put(Direction.RIGHT, right ? ConnectionState.CONNECTED : ConnectionState.DISCONNECTED);
+        this.connectionState.put(Direction.DOWN, down ? ConnectionState.CONNECTED : ConnectionState.DISCONNECTED);
     }
 
     public PImage getImage() {
@@ -78,8 +48,8 @@ public enum StandardCollapseOptions implements ICollapseOption {
 
     @Override
     public void render(PApplet applet, float x, float y, int dimension) {
-        applet.fill(255);
         applet.stroke(0);
+        applet.noStroke();
         applet.image(getImage(), x, y, dimension, dimension);
     }
 
@@ -101,11 +71,11 @@ public enum StandardCollapseOptions implements ICollapseOption {
         if (reduceEntropy(up, Direction.UP, (Tile<StandardCollapseOptions>[]) grid)) {
             pos.add(upPos);
         }
-        
+
         if (reduceEntropy(left, Direction.LEFT, (Tile<StandardCollapseOptions>[]) grid)) {
             pos.add(leftPos);
         }
-        
+
         if (reduceEntropy(right, Direction.RIGHT, (Tile<StandardCollapseOptions>[]) grid)) {
             pos.add(rightPos);
         }
@@ -125,12 +95,12 @@ public enum StandardCollapseOptions implements ICollapseOption {
         Tile<StandardCollapseOptions> tile = grid[index];
 
         if (tile.isCollapsed()) {
-            return false;
+            return true;
         }
-        
+
         List<StandardCollapseOptions> options = tile.getOptions();
         List<StandardCollapseOptions> newOptions = getOptions(direction);
-        
+
         // if it already had conditions, evaluate all of them and only keep the ones that fits all conditions (overlapping elements)
         if (!options.isEmpty()) {
             List<StandardCollapseOptions> fitAllConditions = options.stream().filter(newOptions::contains).toList();
@@ -138,7 +108,7 @@ public enum StandardCollapseOptions implements ICollapseOption {
             options.addAll(fitAllConditions);
             return true;
         }
-        
+
         options.addAll(newOptions);
         return true;
     }

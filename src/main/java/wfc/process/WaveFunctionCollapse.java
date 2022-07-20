@@ -1,4 +1,4 @@
-package wfc;
+package wfc.process;
 
 import processing.core.PApplet;
 import processing.core.PImage;
@@ -25,8 +25,10 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
     private static final int tileSize = 32;
     private static final int screenWidth = 1280;
     private static final int screenHeight = 720;
-    private static final int dimensionX = 9;
-    private static final int dimensionY = 9;
+    private static final int dimensionX = screenWidth / tileSize;
+    private static final int dimensionY = screenHeight / tileSize;
+//    private static final int dimensionX = 9;
+//    private static final int dimensionY = 9;
     
     private final ICollapseType<T> collapseType;
     private final Random random;
@@ -37,7 +39,10 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
     private boolean paused = true;
     private boolean showDebugger = true;
     
-    private Tile<T>[] grid;
+    // volatile as back tracking modifies the grid, and it happens on a separate thread
+    private volatile Tile<T>[] grid;
+    
+    private BackTrackThread backTrackThread; 
 
     public WaveFunctionCollapse(ICollapseType<T> collapseType) {
         this.collapseType = collapseType;
@@ -50,19 +55,50 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
         collapseType.loadContent(this);
         grid = createGrid((x, y) -> new Tile<>(collapseType, x, y));
     }
-
+    
     private void backTrack(int x, int y) {
-        System.out.println("Require back tracking at " + new Pos(x, y));
-        paused = true;
-    }
+        System.out.println("Back tracking at " + new Pos(x, y));
 
+        // find the last tile that influenced this one
+        Tile<?> tile = grid[WaveFunctionCollapse.posToIndex(x, y)];
+
+        List<Pos> influences = tile.getInfluencedBy();
+        Pos lastInfluencePos = influences.get(influences.size() - 1);
+
+        if (lastInfluencePos.x() == x && lastInfluencePos.y() == y) {
+            try {
+                lastInfluencePos = influences.get(influences.size() - 2);
+            } catch (ArrayIndexOutOfBoundsException e) {
+                throw new RuntimeException("No valid back track is found for position: " + new Pos(x, y));
+            }
+        }
+
+        Tile<?> influencer = grid[WaveFunctionCollapse.posToIndex(lastInfluencePos)];
+
+        // remove last the choice of the influencer made and make it choose a different one see if it makes a difference.
+        influencer.getOptions().remove(influencer.getCollapsedTo());
+        influencer.revoke();
+
+        if (influencer.getOptions().isEmpty()) {
+            backTrack(influencer.getX(), influencer.getY());
+        }
+    }
+    
     @Override
     public void draw() {
         background(255);
         
-        if (next || (elapsed % updateDelay == 0 && !paused)) {
+        if (backTrackThread != null) {
+            if (!backTrackThread.isAlive()) {
+                backTrackThread = null;
+            }
+        }
+        
+        if (backTrackThread == null && (next || (elapsed % updateDelay == 0 && !paused))) {
+            next = false;
+
             List<Tile<T>> toPickTiles = new ArrayList<>(List.of(grid));
-            toPickTiles = toPickTiles.stream().filter(a -> !a.isCollapsed()).collect(Collectors.toList());
+            toPickTiles = toPickTiles.stream().filter(a -> !a.isCollapsed() && !a.isBackTracked()).collect(Collectors.toList());
 
             if (!toPickTiles.isEmpty()) {
                 toPickTiles.sort(Comparator.comparingInt(a -> a.getOptions().size()));
@@ -75,7 +111,18 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
                 int y = pickedTile.getY();
                 
                 if (options.isEmpty()) {
-                    backTrack(x, y);
+
+                    grid = createGrid((i, j) -> new Tile<>(collapseType, i, j));
+                    
+                    // TODO: Back track
+//                     // stop wfc execution and start back tracking on a separate thread so rendering will not get interrupted
+//                    System.out.println("Starting back track");
+//                    delay(1000);
+//                    paused = true;
+//                    backTrackThread = new BackTrackThread(x, y, grid);
+//                    backTrackThread.start();
+                    
+                    
                     return;
                 }
                 
@@ -86,8 +133,6 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
                     grid[posToIndex(p)].getInfluencedBy().add(new Pos(x, y));
                 }
             }
-            
-            next = false;
         }
         elapsed++;
 
@@ -113,12 +158,13 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
             grid = createGrid((x, y) -> new Tile<>(collapseType, x, y));
         }
     }
-
+    
     private void render() {
         forEach(tile -> {
             int x = tile.getX() * tileSize;
             int y = tile.getY() * tileSize;
             if (tile.isCollapsed()) {
+                fill(255);
                 tile.getCollapsedTo().render(this, x, y, tileSize);
             } else {
                 fill(255);
@@ -153,8 +199,9 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
         fill(255, 255, 255, 255);
         text("Pos: " + tile.getX() + ", " + tile.getY(), rx + 10, ry + 15);
         text("Collapsed: " + tile.isCollapsed(), rx + 10, ry + 30);
-        text("Entropy: " + tile.getOptions().size(), rx + 10, ry + 45);
-        text("Options: " + tile.getOptions(), rx + 10, ry + 60, 290, 40);
+        text("Collapsed To: " + tile.getCollapsedTo(), rx + 10, ry + 45);
+        text("Entropy: " + tile.getOptions().size(), rx + 10, ry + 60);
+        text("Options: " + tile.getOptions(), rx + 10, ry + 75, 290, 40);
         text("Influenced by: " + tile.getInfluencedBy(), rx + 10, ry + 90, 290, 130);
     }
     
@@ -220,7 +267,7 @@ public class WaveFunctionCollapse<T extends ICollapseOption> extends PApplet {
                 throw new IllegalStateException("Error loading image");
             }
         }
-
+        
         PImage image = new PImage(awtImage);
         if (image.width == -1) {
             throw new IllegalStateException("Error loading image");

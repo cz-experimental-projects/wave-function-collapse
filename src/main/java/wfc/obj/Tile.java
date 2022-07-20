@@ -7,17 +7,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Tile<T extends ICollapseOption> {
-    
+
+    private final List<Pos> influencedBy;
     private final List<T> options;
     private final int x;
     private final int y;
 
     private boolean collapsed;
+    private boolean backTracked;
     private T collapsedTo;
-
-    // for debugging and back tracking
-    private final List<Pos> influencedBy;
-        
+    
     public Tile(ICollapseType<T> type, int x, int y) {
         collapsed = false;
         options = new ArrayList<>(List.of(type.options()));
@@ -38,9 +37,23 @@ public class Tile<T extends ICollapseOption> {
     public void collapse(T option) {
         collapsed = true;
         collapsedTo = option;
+        backTracked = false;
         if (!options.contains(option)) {
             options.add(option);
         }
+    }
+    
+    public void revoke() {
+        collapsed = false;
+        collapsedTo = null;
+    }
+
+    public boolean isBackTracked() {
+        return backTracked;
+    }
+
+    public void setBackTracked(boolean backTracked) {
+        this.backTracked = backTracked;
     }
 
     public T getCollapsedTo() {
